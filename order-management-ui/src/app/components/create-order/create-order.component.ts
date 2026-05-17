@@ -34,1194 +34,831 @@ interface OrderSession {
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="saga-container">
-      <!-- Modern Header with Gradient -->
-      <header class="saga-header">
-        <div class="header-content">
-          <div class="header-title-group">
-            <h1 class="header-title">🍽️ Gourmet-Go</h1>
-            <p class="header-subtitle">Distributed Order Management via Saga Orchestration</p>
+    <div class="co-root">
+      <!-- Ambient grid bg -->
+      <div class="grid-bg" aria-hidden="true"></div>
+      <div class="orb orb1" aria-hidden="true"></div>
+      <div class="orb orb2" aria-hidden="true"></div>
+
+      <div class="co-wrap">
+
+        <!-- ════ LEFT COLUMN — FORM ════ -->
+        <div class="left-col">
+
+          <!-- Page tag -->
+          <div class="page-tag">
+            <span class="tag-dot"></span>
+            SAGA ORCHESTRATOR
           </div>
-          <div class="header-badge" [class]="'badge-' + (currentSession ? 'active' : 'idle')">
-            {{ currentSession ? '⚡ LIVE' : '○ READY' }}
+
+          <h1 class="headline">
+            Place<br><em>Order</em>
+          </h1>
+
+          <p class="subline">Trigger a distributed saga workflow across microservices.</p>
+
+          <!-- Rules -->
+          <div class="rule-stack">
+            <div class="rule-row">
+              <div class="rule-icon ok">✓</div>
+              <div>
+                <span class="rule-val">≤ $100</span>
+                <span class="rule-txt">Happy Path — auto-approved</span>
+              </div>
+            </div>
+            <div class="rule-row">
+              <div class="rule-icon fail">✕</div>
+              <div>
+                <span class="rule-val">&gt; $100</span>
+                <span class="rule-txt">Compensation — rollback triggered</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Form -->
+          <div class="form-block">
+            <label class="form-label">ORDER AMOUNT</label>
+            <div class="input-row">
+              <span class="currency">$</span>
+              <input
+                type="number"
+                [(ngModel)]="amount"
+                name="amount"
+                step="0.01" min="1" max="9999"
+                placeholder="0.00"
+                [disabled]="loading"
+                class="amount-field"
+              />
+            </div>
+            <p class="hint-line">Try $50 for approval · $150 for rejection</p>
+
+            <button
+              class="exec-btn"
+              (click)="submitOrder()"
+              [disabled]="loading || amount <= 0"
+              [class.is-loading]="loading"
+            >
+              <span class="btn-inner">
+                <span class="btn-icon">{{ loading ? '◌' : '▶' }}</span>
+                <span>{{ loading ? 'EXECUTING…' : 'EXECUTE ORDER' }}</span>
+              </span>
+              <span class="btn-track"></span>
+            </button>
+          </div>
+
+          <!-- Error -->
+          <div *ngIf="error" class="err-strip">
+            <span class="err-prefix">ERR</span>
+            {{ error }}
+            <button class="err-close" (click)="error=''">✕</button>
+          </div>
+
+          <!-- Order badge -->
+          <div *ngIf="currentSession" class="order-badge">
+            <div class="ob-row">
+              <span class="ob-key">ORDER ID</span>
+              <span class="ob-val mono">{{ currentSession.orderId | slice:0:12 }}…</span>
+            </div>
+            <div class="ob-divider"></div>
+            <div class="ob-row">
+              <span class="ob-key">AMOUNT</span>
+              <span class="ob-val">{{ '$' + (currentSession.amount | number:'1.2-2') }}</span>
+            </div>
+            <div class="ob-divider"></div>
+            <div class="ob-row">
+              <span class="ob-key">DECISION</span>
+              <span class="ob-val status-chip"
+                [class.chip-ok]="currentSession.finalStatus === 'APPROVED'"
+                [class.chip-fail]="currentSession.finalStatus === 'REJECTED'"
+                [class.chip-pending]="!currentSession.finalStatus"
+              >
+                {{ currentSession.finalStatus || 'PROCESSING' }}
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ════ RIGHT COLUMN — TIMELINE ════ -->
+        <div class="right-col">
+
+          <!-- Empty state -->
+          <div *ngIf="!currentSession" class="empty-state">
+            <div class="es-hex">
+              <svg viewBox="0 0 80 80" width="80" height="80">
+                <polygon points="40,4 74,22 74,58 40,76 6,58 6,22" fill="none" stroke="rgba(230,126,34,0.3)" stroke-width="1.5"/>
+                <polygon points="40,14 66,28 66,52 40,66 14,52 14,28" fill="none" stroke="rgba(230,126,34,0.15)" stroke-width="1"/>
+                <text x="40" y="47" text-anchor="middle" font-size="26" fill="#e67e22">🍕</text>
+              </svg>
+            </div>
+            <h3>Awaiting Dispatch</h3>
+            <p>No active saga — submit an order to begin.</p>
+            <div class="path-preview">
+              <div class="pp-col">
+                <span class="pp-label">HAPPY PATH</span>
+                <div class="pp-steps">
+                  <span>Create</span>
+                  <span class="pp-arr">→</span>
+                  <span>Kitchen</span>
+                  <span class="pp-arr">→</span>
+                  <span>Payment</span>
+                  <span class="pp-arr">→</span>
+                  <span>Finalize</span>
+                </div>
+              </div>
+              <div class="pp-col">
+                <span class="pp-label">COMPENSATION</span>
+                <div class="pp-steps">
+                  <span>Create</span>
+                  <span class="pp-arr">→</span>
+                  <span>Kitchen</span>
+                  <span class="pp-arr">→</span>
+                  <span class="pp-fail">Reject</span>
+                  <span class="pp-arr">→</span>
+                  <span class="pp-fail">Rollback</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active timeline -->
+          <div *ngIf="currentSession" class="timeline-live">
+
+            <!-- TL Header -->
+            <div class="tl-top">
+              <div>
+                <span class="tl-eyebrow">SAGA FLOW</span>
+                <h2 class="tl-title">{{ currentSession.orderId | slice:0:8 }}<span class="tl-ellipsis">…</span></h2>
+              </div>
+              <div class="flow-pill" [class]="'fp-' + currentSession.sagaFlow.toLowerCase()">
+                <span class="fp-pulse"></span>
+                {{ getFlowLabel(currentSession.sagaFlow) }}
+              </div>
+            </div>
+
+            <!-- Result banner -->
+            <div *ngIf="currentSession.finalStatus" class="result-strip"
+                 [class.rs-ok]="currentSession.finalStatus === 'APPROVED'"
+                 [class.rs-fail]="currentSession.finalStatus === 'REJECTED'">
+              <span class="rs-glyph">{{ currentSession.finalStatus === 'APPROVED' ? '✓' : '✕' }}</span>
+              <div>
+                <strong>{{ currentSession.finalStatus === 'APPROVED' ? 'Order Approved' : 'Order Rejected' }}</strong>
+                <p>{{ currentSession.finalStatus === 'APPROVED'
+                    ? 'All saga steps completed successfully. Bon appétit! 🍕'
+                    : 'Payment declined — compensation triggered, all steps rolled back.' }}</p>
+              </div>
+            </div>
+
+            <!-- Steps -->
+            <div class="steps-track">
+              <div
+                *ngFor="let step of currentSession.workflowSteps; let i = index; let last = last"
+                class="step-node"
+                [class]="'sn-' + step.status"
+                [class.sn-active]="isCurrentStep(i)"
+              >
+                <!-- Connector line -->
+                <div class="step-line" *ngIf="!last" [class]="'sl-' + step.status"></div>
+
+                <!-- Marker -->
+                <div class="step-marker">
+                  <span class="sm-glyph">{{ getStepIcon(step.status) }}</span>
+                  <span *ngIf="step.status === 'running'" class="sm-ring"></span>
+                </div>
+
+                <!-- Content card -->
+                <div class="step-card">
+                  <div class="sc-top">
+                    <span class="sc-num">{{ padNum(i + 1) }}</span>
+                    <h4 class="sc-title">{{ step.label }}</h4>
+                    <span class="sc-svc">{{ step.service }}</span>
+                    <span class="sc-badge" [class]="'sb-' + step.status">{{ getStatusLabel(step.status) }}</span>
+                  </div>
+                  <p class="sc-action">{{ step.action }}</p>
+                  <p class="sc-desc">{{ step.description }}</p>
+                  <div *ngIf="step.errorMessage" class="sc-err">
+                    <span class="err-tag">ERR</span> {{ step.errorMessage }}
+                  </div>
+                  <span *ngIf="step.timestamp" class="sc-ts">{{ formatTime(step.timestamp) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Processing ticker -->
+            <div *ngIf="!currentSession.finalStatus" class="ticker">
+              <span class="tick-dot d1"></span>
+              <span class="tick-dot d2"></span>
+              <span class="tick-dot d3"></span>
+              <span class="tick-label">Executing saga…</span>
+            </div>
+
           </div>
         </div>
-      </header>
 
-      <main class="saga-main">
-        <!-- Left Panel: Order Creation Form -->
-        <section class="form-panel">
-          <div class="card form-card">
-            <div class="card-header">
-              <h2>Create Order</h2>
-              <span class="card-badge">Step 1</span>
-            </div>
-
-            <div class="form-description">
-              <p>Submit an order amount to trigger the distributed saga:</p>
-              <ul>
-                <li><strong>Amount ≤ $100</strong> → Auto-approved (Happy Path)</li>
-                <li><strong>Amount > $100</strong> → Auto-rejected (Compensation Path)</li>
-              </ul>
-            </div>
-
-            <form (ngSubmit)="submitOrder()" class="order-form">
-              <div class="form-field">
-                <label for="order-amount">Order Amount</label>
-                <div class="input-container">
-                  <span class="input-prefix">$</span>
-                  <input 
-                    id="order-amount"
-                    type="number" 
-                    [(ngModel)]="amount" 
-                    name="amount"
-                    step="0.01"
-                    min="1"
-                    max="9999"
-                    placeholder="0.00"
-                    [disabled]="loading"
-                    class="amount-input"
-                  />
-                </div>
-                <div class="input-helper">
-                  <span class="helper-hint">💡 Try amounts: $50 (approved), $150 (rejected)</span>
-                </div>
-              </div>
-
-              <button 
-                type="submit"
-                class="submit-button"
-                [disabled]="loading || amount <= 0"
-                [class.loading]="loading"
-              >
-                <span class="button-icon">{{ loading ? '⏳' : '🚀' }}</span>
-                <span class="button-text">{{ loading ? 'Processing Order...' : 'Execute Order' }}</span>
-              </button>
-            </form>
-
-            <!-- Error Alert -->
-            <div *ngIf="error" class="error-banner" @slideIn>
-              <span class="error-icon">⚠️</span>
-              <div class="error-content">
-                <p class="error-title">Order Creation Failed</p>
-                <p class="error-message">{{ error }}</p>
-              </div>
-              <button class="error-close" (click)="error = ''">✕</button>
-            </div>
-
-            <!-- Quick Stats -->
-            <div *ngIf="currentSession" class="quick-stats">
-              <div class="stat">
-                <span class="stat-label">Order ID</span>
-                <span class="stat-value mono">{{ currentSession.orderId | slice:0:8 }}...</span>
-              </div>
-              <div class="stat">
-                <span class="stat-label">Amount</span>
-                <span class="stat-value">\${{ currentSession.amount | number:'1.2-2' }}</span>
-              </div>
-              <div class="stat">
-                <span class="stat-label">Decision</span>
-                <span class="stat-value" [class]="'decision-' + currentSession.finalStatus.toLowerCase()">
-                  {{ currentSession.finalStatus || 'Processing...' }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Right Panel: Saga Timeline Visualization -->
-        <section class="timeline-panel">
-          <!-- State Indicator -->
-          <div *ngIf="!currentSession" class="empty-state">
-            <div class="empty-icon">📋</div>
-            <h3>No Active Order</h3>
-            <p>Create an order to see the saga workflow in action</p>
-            
-            <div class="workflow-guide">
-              <h4>🎯 How It Works</h4>
-              <div class="guide-grid">
-                <div class="guide-path happy-path">
-                  <div class="path-icon">✅</div>
-                  <div class="path-title">Happy Path</div>
-                  <ol class="path-steps">
-                    <li>Order Created</li>
-                    <li>Kitchen Ticket Created</li>
-                    <li>Payment Approved</li>
-                    <li>Order Finalized</li>
-                  </ol>
-                </div>
-                <div class="guide-path failure-path">
-                  <div class="path-icon">🔄</div>
-                  <div class="path-title">Compensation Path</div>
-                  <ol class="path-steps">
-                    <li>Order Created</li>
-                    <li>Kitchen Ticket Created</li>
-                    <li>Payment Failed</li>
-                    <li>Compensation Triggered</li>
-                    <li>Ticket Rolled Back</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Active Timeline -->
-          <div *ngIf="currentSession" class="timeline-active">
-            <!-- Progress Header -->
-            <div class="timeline-header">
-              <h2>Saga Execution Flow</h2>
-              <div class="flow-indicator">
-                <span class="flow-label">{{ getFlowLabel(currentSession.sagaFlow) }}</span>
-                <span class="flow-dot" [class]="'dot-' + currentSession.sagaFlow.toLowerCase()"></span>
-              </div>
-            </div>
-
-            <!-- Final Status Banner -->
-            <div 
-              *ngIf="currentSession.finalStatus" 
-              class="status-banner"
-              [class]="'banner-' + currentSession.finalStatus.toLowerCase()"
-              @slideDown
-            >
-              <div class="banner-icon">{{ currentSession.finalStatus === 'APPROVED' ? '✅' : '❌' }}</div>
-              <div class="banner-content">
-                <h3>{{ currentSession.finalStatus === 'APPROVED' ? 'Order Approved' : 'Order Rejected' }}</h3>
-                <p>
-                  {{ currentSession.finalStatus === 'APPROVED' 
-                    ? 'All services executed successfully. The order is ready for fulfillment.'
-                    : 'Payment failed. Compensation logic rolled back all completed steps.' }}
-                </p>
-              </div>
-            </div>
-
-            <!-- Timeline Stepper -->
-            <div class="timeline-stepper">
-              <div 
-                *ngFor="let step of currentSession.workflowSteps; let i = index; let last = last"
-                class="stepper-item"
-                [class]="'step-' + step.status"
-                [class.step-current]="isCurrentStep(i)"
-              >
-                <!-- Connector Line -->
-                <div *ngIf="!last" class="stepper-connector" [class]="'connector-' + step.status"></div>
-
-                <!-- Step Circle -->
-                <div class="step-circle">
-                  <div class="circle-content">
-                    {{ getStepIcon(step.status) }}
-                  </div>
-                </div>
-
-                <!-- Step Content -->
-                <div class="step-detail">
-                  <div class="detail-header">
-                    <h3 class="step-title">{{ step.label }}</h3>
-                    <span class="service-badge">{{ step.service }}</span>
-                  </div>
-                  
-                  <p class="step-action">{{ step.action }}</p>
-                  <p class="step-description">{{ step.description }}</p>
-
-                  <!-- Error Message -->
-                  <div *ngIf="step.errorMessage" class="error-detail">
-                    <span class="error-prefix">Error:</span> {{ step.errorMessage }}
-                  </div>
-
-                  <!-- Status Badge -->
-                  <div class="status-badge" [class]="'badge-' + step.status">
-                    {{ getStatusLabel(step.status) }}
-                  </div>
-
-                  <!-- Timestamp -->
-                  <div *ngIf="step.timestamp" class="step-time">
-                    {{ formatTime(step.timestamp) }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Processing Info -->
-            <div *ngIf="!currentSession.finalStatus" class="processing-info">
-              <div class="processing-dot"></div>
-              <span>Processing saga steps...</span>
-            </div>
-          </div>
-        </section>
-      </main>
+      </div>
     </div>
   `,
   styles: [`
-    * {
-      box-sizing: border-box;
+    /* ── TOKENS ─────────────────────────────── */
+    :host {
+      --fire: #e67e22;
+      --ember: #c0392b;
+      --gold: #f39c12;
+      --ink: #0d0804;
+      --surface: #141008;
+      --panel: #1c1610;
+      --border: rgba(230,126,34,0.18);
+      --text: #f0e6d8;
+      --muted: rgba(240,230,216,0.45);
+      --mono: 'Courier New', monospace;
     }
 
-    .saga-container {
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f4c75 100%);
+    /* ── ROOT ────────────────────────────────── */
+    .co-root {
       min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
-      color: #1e293b;
-    }
-
-    /* ============================================
-       HEADER SECTION
-       ============================================ */
-    .saga-header {
-      background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.8) 100%);
-      border-bottom: 1px solid rgba(100, 150, 255, 0.2);
-      padding: 40px 32px;
-      backdrop-filter: blur(10px);
-    }
-
-    .header-content {
-      max-width: 1400px;
-      margin: 0 auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 32px;
-    }
-
-    .header-title-group {
-      flex: 1;
-    }
-
-    .header-title {
-      font-size: 42px;
-      font-weight: 800;
-      color: #ffffff;
-      margin: 0 0 8px 0;
-      letter-spacing: -0.5px;
-    }
-
-    .header-subtitle {
-      font-size: 16px;
-      color: #cbd5e1;
-      margin: 0;
-      font-weight: 400;
-    }
-
-    .header-badge {
-      padding: 12px 20px;
-      border-radius: 50px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .badge-idle {
-      background: rgba(100, 116, 139, 0.2);
-      color: #94a3b8;
-    }
-
-    .badge-active {
-      background: rgba(59, 130, 246, 0.2);
-      color: #3b82f6;
-      border-color: rgba(59, 130, 246, 0.3);
-    }
-
-    /* ============================================
-       MAIN LAYOUT
-       ============================================ */
-    .saga-main {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 40px 32px;
-      display: grid;
-      grid-template-columns: 400px 1fr;
-      gap: 40px;
-      align-items: start;
-    }
-
-    @media (max-width: 1200px) {
-      .saga-main {
-        grid-template-columns: 1fr;
-        gap: 32px;
-      }
-    }
-
-    /* ============================================
-       CARDS & PANELS
-       ============================================ */
-    .card {
-      background: white;
-      border-radius: 16px;
-      padding: 32px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.8);
-      animation: cardSlideIn 0.5s ease-out;
-    }
-
-    @keyframes cardSlideIn {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 2px solid #f1f5f9;
-    }
-
-    .card h2 {
-      font-size: 26px;
-      font-weight: 700;
-      color: #0f172a;
-      margin: 0;
-    }
-
-    .card-badge {
-      background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
-      color: white;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-    }
-
-    /* ============================================
-       FORM PANEL
-       ============================================ */
-    .form-panel {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .form-card {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .form-description {
-      color: #64748b;
-      font-size: 14px;
-      line-height: 1.6;
-      margin-bottom: 24px;
-    }
-
-    .form-description p {
-      margin: 0 0 12px 0;
-    }
-
-    .form-description ul {
-      margin: 0;
-      padding-left: 20px;
-      color: #475569;
-    }
-
-    .form-description li {
-      margin: 8px 0;
-    }
-
-    .order-form {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      margin-bottom: 24px;
-    }
-
-    .form-field {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .form-field label {
-      font-size: 14px;
-      font-weight: 600;
-      color: #0f172a;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .input-container {
+      background: var(--surface);
       position: relative;
+      overflow: hidden;
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text);
+    }
+
+    /* Grid background */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(230,126,34,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(230,126,34,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb1 { width: 600px; height: 600px; background: rgba(192,57,43,0.12); top: -200px; left: -150px; }
+    .orb2 { width: 500px; height: 500px; background: rgba(230,126,34,0.08); bottom: -200px; right: -100px; }
+
+    /* ── WRAPPER ─────────────────────────────── */
+    .co-wrap {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      min-height: 100vh;
+      gap: 0;
+    }
+
+    @media (max-width: 1100px) { .co-wrap { grid-template-columns: 1fr; } }
+
+    /* ── LEFT COLUMN ─────────────────────────── */
+    .left-col {
+      padding: 56px 48px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .page-tag {
       display: flex;
       align-items: center;
-    }
-
-    .input-prefix {
-      position: absolute;
-      left: 16px;
-      font-size: 18px;
+      gap: 8px;
+      font-size: 11px;
       font-weight: 700;
-      color: #64748b;
-      pointer-events: none;
+      letter-spacing: 0.15em;
+      color: var(--fire);
+      font-family: var(--mono);
+    }
+    .tag-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--fire);
+      animation: blink 1.5s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    .headline {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: clamp(52px, 6vw, 76px);
+      font-weight: 900;
+      line-height: 0.92;
+      color: var(--text);
+      margin: 0;
+    }
+    .headline em {
+      font-style: normal;
+      color: var(--fire);
+      -webkit-text-stroke: 0px;
     }
 
-    .amount-input {
-      width: 100%;
-      padding: 14px 16px 14px 36px;
-      font-size: 16px;
-      border: 2px solid #e2e8f0;
-      border-radius: 10px;
-      background: white;
-      color: #0f172a;
-      font-weight: 500;
-      transition: all 0.3s ease;
-      font-family: 'Monaco', 'Menlo', monospace;
+    .subline {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin: 0;
     }
 
-    .amount-input:focus {
-      outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
-      background: #f8fafc;
+    /* Rules */
+    .rule-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
     }
-
-    .amount-input:disabled {
-      background: #f1f5f9;
-      color: #94a3b8;
-      cursor: not-allowed;
-    }
-
-    .input-helper {
-      font-size: 12px;
-      color: #94a3b8;
-      padding: 0 4px;
-    }
-
-    .helper-hint {
-      display: inline-flex;
+    .rule-row {
+      display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 16px;
+      padding: 14px 18px;
+      background: rgba(255,255,255,0.025);
+      transition: background 0.2s;
     }
-
-    .submit-button {
-      padding: 14px 20px;
-      font-size: 16px;
+    .rule-row:hover { background: rgba(255,255,255,0.04); }
+    .rule-icon {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
       font-weight: 700;
+      flex-shrink: 0;
+    }
+    .rule-icon.ok   { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .rule-icon.fail { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .rule-val { display: block; font-size: 14px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+    .rule-txt { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* Form block */
+    .form-block { display: flex; flex-direction: column; gap: 10px; }
+    .form-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .input-row {
+      display: flex;
+      align-items: center;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      transition: border-color 0.25s;
+    }
+    .input-row:focus-within { border-color: var(--fire); }
+    .currency {
+      padding: 0 16px;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--muted);
+      font-family: var(--mono);
+      border-right: 1px solid var(--border);
+    }
+    .amount-field {
+      flex: 1;
+      padding: 16px 18px;
+      font-size: 28px;
+      font-weight: 800;
+      background: transparent;
       border: none;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
-      color: white;
+      outline: none;
+      color: var(--text);
+      font-family: var(--mono);
+    }
+    .amount-field::placeholder { color: rgba(240,230,216,0.2); }
+    .amount-field:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .hint-line { font-size: 11px; color: rgba(240,230,216,0.3); font-family: var(--mono); }
+
+    /* Execute button */
+    .exec-btn {
+      position: relative;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
       cursor: pointer;
-      transition: all 0.3s ease;
+      overflow: hidden;
+      transition: border-color 0.25s, transform 0.2s;
+    }
+    .exec-btn:hover:not(:disabled) {
+      border-color: var(--fire);
+      transform: translateY(-1px);
+    }
+    .exec-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-inner {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      letter-spacing: 0.3px;
-      text-transform: uppercase;
-      font-size: 14px;
+      gap: 12px;
+      padding: 18px 28px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--text);
+      font-family: var(--mono);
+      position: relative;
+      z-index: 1;
     }
-
-    .submit-button:hover:not(:disabled) {
-      transform: translateY(-3px);
-      box-shadow: 0 12px 24px rgba(59, 130, 246, 0.4);
-    }
-
-    .submit-button:active:not(:disabled) {
-      transform: translateY(-1px);
-    }
-
-    .submit-button:disabled {
-      background: #cbd5e1;
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    .submit-button.loading {
-      background: linear-gradient(90deg, #3b82f6, #1e40af, #3b82f6);
+    .btn-icon { font-size: 16px; color: var(--fire); }
+    .btn-track {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(230,126,34,0.08), transparent);
       background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
+      opacity: 0;
+      transition: opacity 0.3s;
     }
-
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
+    .exec-btn:hover:not(:disabled) .btn-track { opacity: 1; }
+    .exec-btn.is-loading .btn-track {
+      opacity: 1;
+      animation: scan 1.4s linear infinite;
     }
+    @keyframes scan { from{background-position:200% 0} to{background-position:-200% 0} }
 
-    .button-icon {
-      font-size: 18px;
-      display: inline-block;
-    }
-
-    .button-text {
-      display: block;
-    }
-
-    /* ============================================
-       ERROR BANNER
-       ============================================ */
-    .error-banner {
+    /* Error */
+    .err-strip {
       display: flex;
-      align-items: flex-start;
-      gap: 16px;
-      padding: 16px;
-      background: #fef2f2;
-      border: 1px solid #fee2e2;
-      border-radius: 10px;
-      margin-top: 16px;
-      animation: slideIn 0.3s ease-out;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 6px;
+      font-size: 13px;
+      color: #fca5a5;
+      font-family: var(--mono);
     }
-
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(-10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .error-icon {
-      font-size: 20px;
+    .err-prefix {
+      padding: 2px 8px;
+      background: rgba(239,68,68,0.2);
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #ef4444;
       flex-shrink: 0;
     }
-
-    .error-content {
-      flex: 1;
+    .err-strip p { flex: 1; margin: 0; }
+    .err-close {
+      background: none; border: none; cursor: pointer; color: #ef4444;
+      font-size: 14px; padding: 0; margin-left: auto; flex-shrink: 0;
     }
 
-    .error-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #7f1d1d;
-      margin: 0 0 4px 0;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .error-message {
-      font-size: 14px;
-      color: #991b1b;
-      margin: 0;
-      line-height: 1.4;
-    }
-
-    .error-close {
-      background: none;
-      border: none;
-      color: #dc2626;
-      cursor: pointer;
-      font-size: 20px;
-      padding: 0;
-      opacity: 0.6;
-      transition: opacity 0.2s;
-    }
-
-    .error-close:hover {
-      opacity: 1;
-    }
-
-    /* ============================================
-       QUICK STATS
-       ============================================ */
-    .quick-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      padding-top: 16px;
-      border-top: 2px solid #f1f5f9;
-      margin-top: 16px;
-    }
-
-    .stat {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 12px;
-      background: #f8fafc;
+    /* Order badge */
+    .order-badge {
+      border: 1px solid var(--border);
       border-radius: 8px;
-      text-align: center;
+      overflow: hidden;
+      background: rgba(255,255,255,0.02);
     }
-
-    .stat-label {
+    .ob-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 18px;
+    }
+    .ob-divider { height: 1px; background: var(--border); }
+    .ob-key {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .ob-val {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ob-val.mono { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    .status-chip {
+      padding: 4px 12px;
+      border-radius: 4px;
       font-size: 11px;
       font-weight: 700;
-      color: #94a3b8;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
+      font-family: var(--mono);
+    }
+    .chip-ok      { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .chip-fail    { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .chip-pending { background: rgba(230,126,34,0.15); color: var(--fire); animation: pulse-chip 1.5s infinite; }
+    @keyframes pulse-chip { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+    /* ── RIGHT COLUMN ────────────────────────── */
+    .right-col {
+      padding: 56px 48px;
+      overflow-y: auto;
     }
 
-    .stat-value {
-      font-size: 14px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-
-    .stat-value.mono {
-      font-family: 'Monaco', monospace;
-      font-size: 13px;
-    }
-
-    .decision-approved {
-      color: #16a34a;
-      background: #dcfce7;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-
-    .decision-rejected {
-      color: #dc2626;
-      background: #fee2e2;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-
-    .decision-processing {
-      color: #3b82f6;
-      background: #dbeafe;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-
-    /* ============================================
-       TIMELINE PANEL
-       ============================================ */
-    .timeline-panel {
-      background: white;
-      border-radius: 16px;
-      padding: 32px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      min-height: 600px;
-      display: flex;
-      flex-direction: column;
-      border: 1px solid rgba(255, 255, 255, 0.8);
-      animation: cardSlideIn 0.5s ease-out;
-    }
-
-    /* ============================================
-       EMPTY STATE
-       ============================================ */
+    /* Empty state */
     .empty-state {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       text-align: center;
-      padding: 60px 20px;
-      color: #64748b;
+      gap: 16px;
+      padding-top: 60px;
     }
+    .es-hex { opacity: 0.7; animation: float 5s ease-in-out infinite; }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+    .empty-state h3 { font-family: 'Playfair Display', serif; font-size: 28px; color: var(--text); margin: 0; }
+    .empty-state > p { color: var(--muted); font-size: 14px; margin: 0; }
 
-    .empty-icon {
-      font-size: 64px;
-      margin-bottom: 16px;
-      animation: float 3s ease-in-out infinite;
-    }
-
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
-    }
-
-    .empty-state h3 {
-      font-size: 24px;
-      color: #0f172a;
-      margin: 0 0 8px 0;
-    }
-
-    .empty-state p {
-      font-size: 16px;
-      margin: 0 0 32px 0;
-      color: #94a3b8;
-    }
-
-    .workflow-guide {
-      text-align: left;
-      width: 100%;
-      margin-top: 24px;
-    }
-
-    .workflow-guide h4 {
-      font-size: 14px;
-      font-weight: 700;
-      color: #0f172a;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 0 0 16px 0;
-    }
-
-    .guide-grid {
+    .path-preview {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 16px;
+      width: 100%;
+      max-width: 520px;
+      margin-top: 12px;
     }
-
-    .guide-path {
-      padding: 16px;
-      border-radius: 12px;
-      border: 2px solid #e2e8f0;
-      background: #f8fafc;
-      transition: all 0.3s;
+    .pp-col {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 18px;
+      background: rgba(255,255,255,0.02);
     }
-
-    .happy-path {
-      border-left: 4px solid #16a34a;
-    }
-
-    .happy-path .path-icon {
-      color: #16a34a;
-    }
-
-    .failure-path {
-      border-left: 4px solid #f59e0b;
-    }
-
-    .failure-path .path-icon {
-      color: #f59e0b;
-    }
-
-    .path-icon {
-      font-size: 28px;
-      margin-bottom: 8px;
-    }
-
-    .path-title {
-      font-size: 13px;
+    .pp-label {
+      display: block;
+      font-size: 10px;
       font-weight: 700;
-      color: #0f172a;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 0 0 8px 0;
+      letter-spacing: 0.12em;
+      color: var(--fire);
+      font-family: var(--mono);
+      margin-bottom: 10px;
     }
-
-    .path-steps {
-      margin: 0;
-      padding-left: 20px;
-      font-size: 13px;
-      color: #475569;
-      line-height: 1.6;
+    .pp-steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 6px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
     }
+    .pp-arr { color: rgba(230,126,34,0.4); }
+    .pp-fail { color: #ef4444; }
 
-    .path-steps li {
-      margin: 6px 0;
-    }
-
-    /* ============================================
-       TIMELINE ACTIVE
-       ============================================ */
-    .timeline-active {
+    /* Timeline live */
+    .timeline-live {
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 28px;
     }
 
-    .timeline-header {
+    /* TL top */
+    .tl-top {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      padding-bottom: 16px;
-      border-bottom: 2px solid #f1f5f9;
+      align-items: flex-start;
+      gap: 16px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
     }
-
-    .timeline-header h2 {
-      margin: 0;
+    .tl-eyebrow {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--fire);
+      font-family: var(--mono);
+      margin-bottom: 4px;
+    }
+    .tl-title {
+      font-family: var(--mono);
       font-size: 20px;
-      color: #0f172a;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0;
     }
+    .tl-ellipsis { opacity: 0.4; }
 
-    .flow-indicator {
+    /* Flow pill */
+    .flow-pill {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 12px;
-      background: #f1f5f9;
-      border-radius: 20px;
-    }
-
-    .flow-label {
-      font-size: 12px;
+      padding: 8px 14px;
+      border-radius: 4px;
+      font-size: 11px;
       font-weight: 700;
-      color: #475569;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
+      font-family: var(--mono);
+      border: 1px solid;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-
-    .flow-dot {
-      width: 8px;
-      height: 8px;
+    .fp-happy_path   { background: rgba(34,197,94,0.1); color: #22c55e; border-color: rgba(34,197,94,0.3); }
+    .fp-compensation_path { background: rgba(239,68,68,0.1); color: #ef4444; border-color: rgba(239,68,68,0.3); }
+    .fp-in_progress  { background: rgba(230,126,34,0.1); color: var(--fire); border-color: rgba(230,126,34,0.3); }
+    .fp-pulse {
+      width: 6px; height: 6px;
       border-radius: 50%;
-      animation: pulse 2s ease-in-out infinite;
+      background: currentColor;
+      animation: blink 1.5s step-end infinite;
     }
 
-    .dot-happy_path {
-      background: #16a34a;
-    }
-
-    .dot-compensation_path {
-      background: #f59e0b;
-    }
-
-    .dot-in_progress {
-      background: #3b82f6;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(1.2); }
-    }
-
-    /* ============================================
-       STATUS BANNER
-       ============================================ */
-    .status-banner {
-      padding: 20px;
-      border-radius: 12px;
+    /* Result strip */
+    .result-strip {
       display: flex;
       gap: 16px;
       align-items: flex-start;
-      animation: slideDown 0.4s ease-out;
+      padding: 18px 22px;
+      border-radius: 8px;
+      border: 1px solid;
+      animation: slide-in 0.35s ease-out;
     }
-
-    @keyframes slideDown {
-      from {
-        opacity: 0;
-        transform: translateY(-15px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .banner-approved {
-      background: #ecfdf5;
-      border: 2px solid #10b981;
-    }
-
-    .banner-rejected {
-      background: #fef2f2;
-      border: 2px solid #ef4444;
-    }
-
-    .banner-icon {
-      font-size: 32px;
+    @keyframes slide-in { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .rs-ok   { background: rgba(34,197,94,0.07); border-color: rgba(34,197,94,0.25); }
+    .rs-fail { background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.25); }
+    .rs-glyph {
+      font-size: 22px;
+      font-weight: 900;
+      font-family: var(--mono);
       flex-shrink: 0;
     }
+    .rs-ok .rs-glyph   { color: #22c55e; }
+    .rs-fail .rs-glyph { color: #ef4444; }
+    .result-strip strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+    .result-strip p { font-size: 13px; color: var(--muted); margin: 0; }
 
-    .banner-content h3 {
-      margin: 0 0 6px 0;
-      font-size: 16px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-
-    .banner-content p {
-      margin: 0;
-      font-size: 14px;
-      color: #64748b;
-      line-height: 1.4;
-    }
-
-    /* ============================================
-       TIMELINE STEPPER
-       ============================================ */
-    .timeline-stepper {
+    /* Steps track */
+    .steps-track {
       display: flex;
       flex-direction: column;
-      gap: 2px;
-      position: relative;
+      gap: 0;
     }
 
-    .stepper-item {
+    .step-node {
       display: grid;
-      grid-template-columns: 60px 1fr;
+      grid-template-columns: 56px 1fr;
       gap: 20px;
       position: relative;
-      padding: 16px;
-      border-radius: 12px;
-      transition: all 0.3s ease;
+      padding-bottom: 28px;
     }
+    .step-node:last-child { padding-bottom: 0; }
 
-    .stepper-item::before {
-      content: '';
+    /* Connector line — left of marker */
+    .step-line {
       position: absolute;
-      left: 29px;
-      top: 60px;
+      left: 27px;
+      top: 52px;
+      bottom: 0;
       width: 2px;
-      height: calc(100% + 2px);
-      background: #e2e8f0;
-      pointer-events: none;
+      background: var(--border);
     }
+    .sl-completed { background: rgba(34,197,94,0.35); }
+    .sl-running   { background: rgba(230,126,34,0.35); }
+    .sl-failed    { background: rgba(239,68,68,0.35); }
+    .sl-compensated { background: rgba(245,158,11,0.35); }
 
-    .stepper-item:last-child::before {
-      display: none;
-    }
-
-    .step-pending::before { background: #cbd5e1; }
-    .step-running::before { background: #3b82f6; }
-    .step-completed::before { background: #10b981; }
-    .step-failed::before { background: #ef4444; }
-    .step-compensated::before { background: #f59e0b; }
-
-    .stepper-item.step-running {
-      background: rgba(59, 130, 246, 0.05);
-      border-left: 3px solid #3b82f6;
-    }
-
-    .stepper-item.step-completed {
-      background: rgba(16, 185, 129, 0.05);
-    }
-
-    .stepper-item.step-failed {
-      background: rgba(239, 68, 68, 0.05);
-      border-left: 3px solid #ef4444;
-    }
-
-    .stepper-item.step-compensated {
-      background: rgba(245, 158, 11, 0.05);
-    }
-
-    .stepper-connector {
-      grid-column: 1 / 2;
-      position: relative;
-    }
-
-    .step-circle {
-      width: 60px;
-      height: 60px;
+    /* Marker */
+    .step-marker {
+      width: 56px; height: 56px;
       border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      background: white;
-      border: 3px solid #e2e8f0;
-      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--panel);
+      border: 2px solid var(--border);
+      font-size: 18px;
+      font-family: var(--mono);
       position: relative;
-      z-index: 2;
-      transition: all 0.3s ease;
+      flex-shrink: 0;
+      z-index: 1;
+      transition: border-color 0.3s;
     }
+    .sn-pending   .step-marker { color: var(--muted); }
+    .sn-running   .step-marker { border-color: var(--fire); color: var(--fire); }
+    .sn-completed .step-marker { border-color: #22c55e; color: #22c55e; }
+    .sn-failed    .step-marker { border-color: #ef4444; color: #ef4444; }
+    .sn-compensated .step-marker { border-color: #f59e0b; color: #f59e0b; }
 
-    .step-pending .step-circle {
-      background: #f1f5f9;
-      border-color: #cbd5e1;
+    .sm-ring {
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--fire);
+      animation: spin 1s linear infinite;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    .step-running .step-circle {
-      background: #dbeafe;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.1);
-      animation: pulse-circle 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse-circle {
-      0%, 100% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.1); }
-      50% { box-shadow: 0 0 0 12px rgba(59, 130, 246, 0.05); }
-    }
-
-    .step-completed .step-circle {
-      background: #dcfce7;
-      border-color: #10b981;
-    }
-
-    .step-failed .step-circle {
-      background: #fee2e2;
-      border-color: #ef4444;
-    }
-
-    .step-compensated .step-circle {
-      background: #fef3c7;
-      border-color: #f59e0b;
-    }
-
-    .step-detail {
+    /* Step card */
+    .step-card {
+      background: rgba(255,255,255,0.025);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding-top: 4px;
+      gap: 7px;
+      transition: border-color 0.25s;
     }
+    .sn-running   .step-card { border-color: rgba(230,126,34,0.35); }
+    .sn-completed .step-card { border-color: rgba(34,197,94,0.2); }
+    .sn-failed    .step-card { border-color: rgba(239,68,68,0.25); }
+    .sn-compensated .step-card { border-color: rgba(245,158,11,0.25); }
 
-    .detail-header {
+    .sc-top {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
     }
-
-    .step-title {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 700;
-      color: #0f172a;
+    .sc-num {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
     }
-
-    .service-badge {
-      padding: 4px 10px;
-      border-radius: 20px;
-      background: #f1f5f9;
-      color: #0f172a;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .step-action {
-      margin: 0;
+    .sc-title {
       font-size: 14px;
-      font-weight: 600;
-      color: #0f172a;
-    }
-
-    .step-description {
+      font-weight: 700;
+      color: var(--text);
       margin: 0;
-      font-size: 13px;
-      color: #64748b;
-      line-height: 1.5;
+      flex: 1;
+      min-width: 0;
     }
+    .sc-svc {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 2px 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px;
+      font-family: var(--mono);
+    }
+    .sc-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 9px;
+      border-radius: 3px;
+      font-family: var(--mono);
+    }
+    .sb-pending     { background: rgba(255,255,255,0.05); color: var(--muted); }
+    .sb-running     { background: rgba(230,126,34,0.15); color: var(--fire); animation: pulse-chip 1.5s infinite; }
+    .sb-completed   { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .sb-failed      { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .sb-compensated { background: rgba(245,158,11,0.12); color: #f59e0b; }
 
-    .error-detail {
-      padding: 8px 12px;
-      background: #fef2f2;
-      border-left: 2px solid #ef4444;
+    .sc-action { font-size: 13px; font-weight: 600; color: rgba(240,230,216,0.7); margin: 0; }
+    .sc-desc   { font-size: 12px; color: var(--muted); margin: 0; line-height: 1.5; }
+
+    .sc-err {
+      font-size: 12px;
+      color: #fca5a5;
+      padding: 6px 10px;
+      background: rgba(239,68,68,0.08);
       border-radius: 4px;
-      font-size: 12px;
-      color: #b91c1c;
+      font-family: var(--mono);
+    }
+    .err-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      background: rgba(239,68,68,0.2);
+      border-radius: 2px;
+      font-size: 9px;
+      color: #ef4444;
+      margin-right: 6px;
     }
 
-    .error-prefix {
-      font-weight: 700;
-    }
+    .sc-ts { font-size: 11px; color: rgba(240,230,216,0.2); font-family: var(--mono); }
 
-    .status-badge {
-      display: inline-flex;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      width: fit-content;
-    }
-
-    .badge-pending {
-      background: #f1f5f9;
-      color: #64748b;
-    }
-
-    .badge-running {
-      background: #dbeafe;
-      color: #1e40af;
-      animation: pulse-badge 1.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse-badge {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
-
-    .badge-completed {
-      background: #dcfce7;
-      color: #15803d;
-    }
-
-    .badge-failed {
-      background: #fee2e2;
-      color: #b91c1c;
-    }
-
-    .badge-compensated {
-      background: #fef3c7;
-      color: #92400e;
-    }
-
-    .step-time {
-      font-size: 12px;
-      color: #94a3b8;
-      margin-top: 4px;
-    }
-
-    /* ============================================
-       PROCESSING INFO
-       ============================================ */
-    .processing-info {
+    /* Ticker */
+    .ticker {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 12px;
-      padding: 20px;
-      background: #f0f9ff;
-      border-radius: 12px;
-      color: #0369a1;
-      font-size: 14px;
-      font-weight: 600;
-      margin-top: 16px;
+      gap: 10px;
+      padding: 14px 18px;
+      border: 1px solid rgba(230,126,34,0.15);
+      border-radius: 6px;
+      background: rgba(230,126,34,0.04);
     }
-
-    .processing-dot {
-      width: 10px;
-      height: 10px;
+    .tick-dot {
+      width: 5px; height: 5px;
       border-radius: 50%;
-      background: #0369a1;
-      animation: dot-pulse 1.5s ease-in-out infinite;
+      background: var(--fire);
+      animation: dot-pulse 1.2s ease-in-out infinite;
     }
+    .d1 { animation-delay: 0s; }
+    .d2 { animation-delay: 0.2s; }
+    .d3 { animation-delay: 0.4s; }
+    @keyframes dot-pulse { 0%,100%{opacity:0.3;transform:scale(0.8)} 50%{opacity:1;transform:scale(1)} }
+    .tick-label { font-size: 12px; color: var(--fire); font-family: var(--mono); letter-spacing: 0.08em; }
 
-    @keyframes dot-pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(1.2); }
-    }
-
-    /* ============================================
-       RESPONSIVE
-       ============================================ */
-    @media (max-width: 768px) {
-      .saga-header {
-        padding: 24px 16px;
-      }
-
-      .header-content {
-        flex-direction: column;
-        text-align: center;
-      }
-
-      .header-title {
-        font-size: 28px;
-      }
-
-      .saga-main {
-        padding: 24px 16px;
-        gap: 24px;
-      }
-
-      .card {
-        padding: 24px;
-      }
-
-      .timeline-stepper {
-        gap: 12px;
-      }
-
-      .stepper-item {
-        grid-template-columns: 48px 1fr;
-        gap: 12px;
-        padding: 12px;
-      }
-
-      .step-circle {
-        width: 48px;
-        height: 48px;
-        font-size: 20px;
-      }
-
-      .guide-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .quick-stats {
-        grid-template-columns: 1fr;
-      }
+    @media (max-width: 1100px) {
+      .left-col, .right-col { padding: 36px 24px; }
+      .co-wrap { grid-template-columns: 1fr; }
+      .left-col { border-right: none; border-bottom: 1px solid var(--border); }
     }
   `]
 })
@@ -1230,188 +867,100 @@ export class CreateOrderComponent implements OnInit, OnDestroy {
   loading = false;
   error = '';
   currentSession: OrderSession | null = null;
+  padNum = (n: number) => String(n).padStart(2, '0');
   private destroy$ = new Subject<void>();
   private pollInterval: any;
 
-  constructor(
-    private orderService: OrderService,
-    private cdr: ChangeDetectorRef
-  ) {}
-
+  constructor(private orderService: OrderService, private cdr: ChangeDetectorRef) {}
   ngOnInit() {}
-
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
-    }
+    if (this.pollInterval) clearInterval(this.pollInterval);
   }
 
   submitOrder() {
-    if (this.amount <= 0) {
-      this.error = 'Order amount must be greater than $0';
-      return;
-    }
-
+    if (this.amount <= 0) { this.error = 'Order amount must be greater than $0'; return; }
     this.loading = true;
     this.error = '';
-
-    this.orderService.createOrder({ amount: this.amount })
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          if (response.data && response.data.orderId) {
-            this.currentSession = {
-              orderId: response.data.orderId,
-              amount: this.amount,
-              scenario: 'backend-driven',
-              currentStep: 0,
-              sagaFlow: 'IN_PROGRESS',
-              finalStatus: '',
-              createdAt: Date.now(),
-              workflowSteps: []
-            };
-            this.pollOrderStatus();
-          }
-        },
-        error: (err) => {
-          this.loading = false;
-          this.error = err.error?.message || 'Failed to create order. Please try again.';
-          this.cdr.detectChanges();
+    this.orderService.createOrder({ amount: this.amount }).pipe(takeUntil(this.destroy$)).subscribe({
+      next: (response) => {
+        if (response.data?.orderId) {
+          this.currentSession = {
+            orderId: response.data.orderId,
+            amount: this.amount,
+            currentStep: 0,
+            sagaFlow: 'IN_PROGRESS',
+            finalStatus: '',
+            createdAt: Date.now(),
+            workflowSteps: []
+          };
+          this.pollOrderStatus();
         }
-      });
+      },
+      error: (err) => {
+        this.loading = false;
+        this.error = err.error?.message || 'Failed to create order. Please try again.';
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   private pollOrderStatus() {
     if (!this.currentSession) return;
-
     let pollCount = 0;
     const maxPolls = 30;
-
     this.pollInterval = setInterval(() => {
       pollCount++;
-
-      this.orderService.getOrderStatus(this.currentSession!.orderId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (response) => {
-            if (response.data) {
-              const status = response.data.status;
-              this.currentSession!.sagaFlow = response.data.sagaFlow || 'IN_PROGRESS';
-              this.currentSession!.workflowSteps = (response.data.steps || []).map((step: SagaStep) => ({
-                id: step.id,
-                label: step.label,
-                service: step.service,
-                action: step.action,
-                description: step.description,
-                status: step.status,
-                icon: step.icon,
-                timestamp: step.timestamp,
-                errorMessage: step.errorMessage
-              }));
-
-              // Find the current active step
-              let activeStepIndex = this.currentSession!.workflowSteps.length - 1;
-              for (let i = 0; i < this.currentSession!.workflowSteps.length; i++) {
-                if (this.currentSession!.workflowSteps[i].status === 'running') {
-                  activeStepIndex = i;
-                  break;
-                }
-              }
-              this.currentSession!.currentStep = Math.max(0, activeStepIndex);
-              this.cdr.detectChanges();
-
-              if (status === 'APPROVED' || status === 'REJECTED') {
-                clearInterval(this.pollInterval);
-                this.loading = false;
-                this.currentSession!.finalStatus = status;
-                this.currentSession!.completedAt = Date.now();
-                this.cdr.detectChanges();
-              }
+      this.orderService.getOrderStatus(this.currentSession!.orderId).pipe(takeUntil(this.destroy$)).subscribe({
+        next: (response) => {
+          if (response.data) {
+            this.currentSession!.sagaFlow = response.data.sagaFlow || 'IN_PROGRESS';
+            this.currentSession!.workflowSteps = (response.data.steps || []).map((s: SagaStep) => ({
+              id: s.id, label: s.label, service: s.service, action: s.action,
+              description: s.description, status: s.status, icon: s.icon,
+              timestamp: s.timestamp, errorMessage: s.errorMessage
+            }));
+            let active = this.currentSession!.workflowSteps.length - 1;
+            for (let i = 0; i < this.currentSession!.workflowSteps.length; i++) {
+              if (this.currentSession!.workflowSteps[i].status === 'running') { active = i; break; }
             }
-          },
-          error: () => {
-            // Continue polling silently on error
-            if (pollCount >= maxPolls) {
+            this.currentSession!.currentStep = Math.max(0, active);
+            this.cdr.detectChanges();
+            const status = response.data.status;
+            if (status === 'APPROVED' || status === 'REJECTED') {
               clearInterval(this.pollInterval);
+              this.loading = false;
+              this.currentSession!.finalStatus = status;
+              this.currentSession!.completedAt = Date.now();
+              this.cdr.detectChanges();
             }
           }
-        });
+        },
+        error: () => { if (pollCount >= maxPolls) clearInterval(this.pollInterval); }
+      });
     }, 800);
-
-    // Safety timeout: stop polling after 30 seconds
     setTimeout(() => {
-      if (this.pollInterval) {
-        clearInterval(this.pollInterval);
-      }
+      if (this.pollInterval) clearInterval(this.pollInterval);
       if (this.currentSession && !this.currentSession.finalStatus) {
         this.loading = false;
-        this.error = 'Order processing timed out. Please refresh and try again.';
+        this.error = 'Order processing timed out.';
         this.cdr.detectChanges();
       }
     }, 30000);
   }
 
-  isCurrentStep(index: number): boolean {
-    return this.currentSession ? index === this.currentSession.currentStep : false;
-  }
+  isCurrentStep(i: number): boolean { return this.currentSession ? i === this.currentSession.currentStep : false; }
 
-  getStepIcon(status: string): string {
-    switch (status) {
-      case 'pending':
-        return '◯';
-      case 'running':
-        return '⟳';
-      case 'completed':
-        return '✓';
-      case 'failed':
-        return '✕';
-      case 'compensated':
-        return '↻';
-      default:
-        return '?';
-    }
-  }
+  getStepIcon(s: string) { return { pending: '○', running: '◎', completed: '●', failed: '✕', compensated: '↻' }[s] ?? '?'; }
+  getStatusLabel(s: string) { return { pending: 'PENDING', running: 'RUNNING', completed: 'DONE', failed: 'FAILED', compensated: 'ROLLED BACK' }[s] ?? s.toUpperCase(); }
+  getFlowLabel(f: string) { return { HAPPY_PATH: 'HAPPY PATH', COMPENSATION_PATH: 'COMPENSATION', IN_PROGRESS: 'IN PROGRESS' }[f] ?? 'UNKNOWN'; }
 
-  getStatusLabel(status: string): string {
-    switch (status) {
-      case 'pending':
-        return 'Pending';
-      case 'running':
-        return 'Running';
-      case 'completed':
-        return 'Completed';
-      case 'failed':
-        return 'Failed';
-      case 'compensated':
-        return 'Rolled Back';
-      default:
-        return status;
-    }
-  }
-
-  getFlowLabel(flow: string): string {
-    switch (flow) {
-      case 'HAPPY_PATH':
-        return '✓ Happy Path';
-      case 'COMPENSATION_PATH':
-        return '↻ Compensation Path';
-      case 'IN_PROGRESS':
-        return '⟳ Processing...';
-      default:
-        return 'Unknown';
-    }
-  }
-
-  formatTime(timestamp: number): string {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-
-    if (seconds < 60) return `${seconds}s ago`;
-    if (minutes < 60) return `${minutes}m ago`;
-    return new Date(timestamp).toLocaleTimeString();
+  formatTime(ts: number): string {
+    const d = Math.floor((Date.now() - ts) / 1000);
+    if (d < 60) return `${d}s ago`;
+    const m = Math.floor(d / 60);
+    if (m < 60) return `${m}m ago`;
+    return new Date(ts).toLocaleTimeString();
   }
 }
