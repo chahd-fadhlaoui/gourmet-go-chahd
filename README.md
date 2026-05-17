@@ -12,7 +12,7 @@
 - **Architecture style:** Microservices with Saga orchestration (orchestrator + API Gateway aggregation).
 - **Why this architecture:** Microservices separate concerns per business capability (orders, kitchen, accounting). The Saga pattern coordinates distributed transactions without a global two-phase commit, enabling eventual consistency and explicit compensation flows suited for long-running operations across services.
 
----    
+---                  
 
 ## System Architecture
 

@@ -44,7 +44,7 @@ services:
       retries: 20
 
   order-service:
-    image: ${IMAGE_PREFIX:-cherifabenghorbel}/order-service:latest
+    image: ${IMAGE_PREFIX:-chahdafdh}/order-service:latest
     depends_on:
       order-db:
         condition: service_healthy
@@ -56,7 +56,7 @@ services:
       - "50051:50051"
 
   kitchen-service:
-    image: ${IMAGE_PREFIX:-cherifabenghorbel}/kitchen-service:latest
+    image: ${IMAGE_PREFIX:-chahdafdh}/kitchen-service:latest
     depends_on:
       kitchen-db:
         condition: service_healthy
@@ -68,7 +68,7 @@ services:
       - "50052:50052"
 
   accounting-service:
-    image: ${IMAGE_PREFIX:-cherifabenghorbel}/accounting-service:latest
+    image: ${IMAGE_PREFIX:-chahdafdh}/accounting-service:latest
     depends_on:
       accounting-db:
         condition: service_healthy
@@ -80,7 +80,7 @@ services:
       - "50053:50053"
 
   orchestrator:
-    image: ${IMAGE_PREFIX:-cherifabenghorbel}/orchestrator:latest
+    image: ${IMAGE_PREFIX:-chahdafdh}/orchestrator:latest
     depends_on:
       - order-service
       - kitchen-service
@@ -89,14 +89,14 @@ services:
       - "50054:50054"
 
   api-gateway:
-    image: ${IMAGE_PREFIX:-cherifabenghorbel}/api-gateway:latest
+    image: ${IMAGE_PREFIX:-chahdafdh}/api-gateway:latest
     depends_on:
       - orchestrator
     ports:
       - "8080:8080"
 
   order-management-ui:
-    image: ${IMAGE_PREFIX:-cherifabenghorbel}/order-management-ui:latest
+    image: ${IMAGE_PREFIX:-chahdafdh}/order-management-ui:latest
     depends_on:
       - api-gateway
     ports:
