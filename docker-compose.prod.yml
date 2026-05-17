@@ -1,0 +1,103 @@
+version: "3.9"
+
+#############################
+# Production docker-compose
+# This file references images that should be published to Docker Hub.
+#############################
+
+services:
+
+  order-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: order_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d order_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  kitchen-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: kitchen_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kitchen_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  accounting-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: accounting_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d accounting_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  order-service:
+    image: ${IMAGE_PREFIX:-cherifabenghorbel}/order-service:latest
+    depends_on:
+      order-db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://order-db:5432/order_db
+      DB_USER: postgres
+      DB_PASSWORD: password
+    ports:
+      - "50051:50051"
+
+  kitchen-service:
+    image: ${IMAGE_PREFIX:-cherifabenghorbel}/kitchen-service:latest
+    depends_on:
+      kitchen-db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://kitchen-db:5432/kitchen_db
+      DB_USER: postgres
+      DB_PASSWORD: password
+    ports:
+      - "50052:50052"
+
+  accounting-service:
+    image: ${IMAGE_PREFIX:-cherifabenghorbel}/accounting-service:latest
+    depends_on:
+      accounting-db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://accounting-db:5432/accounting_db
+      DB_USER: postgres
+      DB_PASSWORD: password
+    ports:
+      - "50053:50053"
+
+  orchestrator:
+    image: ${IMAGE_PREFIX:-cherifabenghorbel}/orchestrator:latest
+    depends_on:
+      - order-service
+      - kitchen-service
+      - accounting-service
+    ports:
+      - "50054:50054"
+
+  api-gateway:
+    image: ${IMAGE_PREFIX:-cherifabenghorbel}/api-gateway:latest
+    depends_on:
+      - orchestrator
+    ports:
+      - "8080:8080"
+
+  order-management-ui:
+    image: ${IMAGE_PREFIX:-cherifabenghorbel}/order-management-ui:latest
+    depends_on:
+      - api-gateway
+    ports:
+      - "80:80"

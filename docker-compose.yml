@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+
+  order-db:
+    image: postgres:16
+    container_name: order-db
+    environment:
+      POSTGRES_DB: order_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+
+  kitchen-db:
+    image: postgres:16
+    container_name: kitchen-db
+    environment:
+      POSTGRES_DB: kitchen_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+
+  accounting-db:
+    image: postgres:16
+    container_name: accounting-db
+    environment:
+      POSTGRES_DB: accounting_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+
+  order-service:
+    build: ./order-service
+    depends_on:
+      - order-db
+    restart: on-failure
+    environment:
+      DB_URL: jdbc:postgresql://order-db:5432/order_db
+      DB_USER: postgres
+      DB_PASSWORD: password
+    ports:
+      - "50051:50051"
+
+  kitchen-service:
+    build: ./kitchen-service
+    depends_on:
+      - kitchen-db
+    restart: on-failure
+    environment:
+      DB_URL: jdbc:postgresql://kitchen-db:5432/kitchen_db
+      DB_USER: postgres
+      DB_PASSWORD: password
+    ports:
+      - "50052:50052"
+
+  accounting-service:
+    build: ./accounting-service
+    depends_on:
+      - accounting-db
+    restart: on-failure
+    environment:
+      DB_URL: jdbc:postgresql://accounting-db:5432/accounting_db
+      DB_USER: postgres
+      DB_PASSWORD: password
+    ports:
+      - "50053:50053"
+
+  orchestrator:
+    build: ./orchestrator
+    depends_on:
+      - order-service
+      - kitchen-service
+      - accounting-service
+    restart: on-failure
+    ports:
+      - "50054:50054"
+
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - orchestrator

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.gourmet.orchestrator";
+option java_outer_classname = "OrchestratorProto";
+
+package orchestrator;
+
+service OrchestratorService {
+
+  rpc CreateOrder (CreateOrderRequest)
+      returns (CreateOrderResponse);
+
+}
+
+message CreateOrderRequest {
+  double amount = 1;
+}
+
+message CreateOrderResponse {
+  string orderId = 1;
+  string status = 2;
+}

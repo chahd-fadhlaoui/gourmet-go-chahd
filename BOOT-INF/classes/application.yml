@@ -1,0 +1,25 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: api-gateway
+  datasource:
+    url: jdbc:postgresql://order-db:5432/order_db
+    username: postgres
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+grpc:
+  orchestrator:
+    host: orchestrator
+    port: 50054
+
+logging:
+  level:
+    org.example: DEBUG

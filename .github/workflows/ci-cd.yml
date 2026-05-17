@@ -1,0 +1,119 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_PREFIX: ${{ secrets.DOCKERHUB_USERNAME }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 19
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 19
+
+      - name: Cache Maven local repository
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build (Maven)
+        run: mvn -B -DskipTests package
+
+      - name: Set up QEMU (optional for multi-platform)
+        uses: docker/setup-qemu-action@v2
+
+      - name: Validate Docker Hub secrets
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DH_USER" ] || [ -z "$DH_TOKEN" ]; then
+            echo "ERROR: Docker Hub secrets are not set for this repository."
+            echo "Make sure DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are added under Settings → Secrets → Actions."
+            exit 1
+          else
+            echo "Docker Hub secrets present."
+          fi
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push order-service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./order-service
+          file: ./order-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/order-service:latest
+            ${{ env.IMAGE_PREFIX }}/order-service:${{ github.sha }}
+
+      - name: Build and push kitchen-service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./kitchen-service
+          file: ./kitchen-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/kitchen-service:latest
+            ${{ env.IMAGE_PREFIX }}/kitchen-service:${{ github.sha }}
+
+      - name: Build and push accounting-service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./accounting-service
+          file: ./accounting-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/accounting-service:latest
+            ${{ env.IMAGE_PREFIX }}/accounting-service:${{ github.sha }}
+
+      - name: Build and push orchestrator image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./orchestrator
+          file: ./orchestrator/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/orchestrator:latest
+            ${{ env.IMAGE_PREFIX }}/orchestrator:${{ github.sha }}
+
+      - name: Build and push api-gateway image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api-gateway
+          file: ./api-gateway/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/api-gateway:latest
+            ${{ env.IMAGE_PREFIX }}/api-gateway:${{ github.sha }}
+
+      - name: Build and push order-management-ui image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./order-management-ui
+          file: ./order-management-ui/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/order-management-ui:latest
+            ${{ env.IMAGE_PREFIX }}/order-management-ui:${{ github.sha }}
+
+      - name: Cleanup images
+        run: docker image prune -af || true

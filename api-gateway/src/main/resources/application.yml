@@ -1,0 +1,40 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: api-gateway
+  datasource:
+    url: jdbc:postgresql://order-db:5432/order_db
+    username: postgres
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+grpc:
+  orchestrator:
+    host: orchestrator
+    port: 50054
+
+workflow:
+  databases:
+    order:
+      url: jdbc:postgresql://order-db:5432/order_db
+      username: postgres
+      password: password
+    kitchen:
+      url: jdbc:postgresql://kitchen-db:5432/kitchen_db
+      username: postgres
+      password: password
+    accounting:
+      url: jdbc:postgresql://accounting-db:5432/accounting_db
+      username: postgres
+      password: password
+
+logging:
+  level:
+    org.example: DEBUG
